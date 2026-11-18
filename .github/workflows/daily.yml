@@ -11,9 +11,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with: { python-version: "3.11" }
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg fonts-anton
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
       - run: pip install -r requirements.txt
-      - run: mkdir -p assets && cp /usr/share/fonts/truetype/anton/Anton-Regular.ttf assets/ 2>/dev/null || true
+   - run: mkdir -p assets && curl -L "https://raw.githubusercontent.com/google/fonts/main/ofl/anton/Anton%5Bwght%5D.ttf" -o assets/Anton-Regular.ttf
       - run: python pipeline.py
         env:
           GEMINI_KEY: ${{ secrets.GEMINI_KEY }}
