@@ -25,12 +25,12 @@ lyrics_prompt: |
   velvet, static, ghosts, ash), one 4-word hook repeated in every chorus,
   short lines that breathe, NO cliches like "you're my everything".
   Output STRICT JSON only:
-  {"title":"","hook":"","lyrics":"","style_prompt":"","bpm":0,"thumb_text":"","description_hook":""}
+  {{"title":"","hook":"","lyrics":"","style_prompt":"","bpm":0,"thumb_text":"","description_hook":""}}
 
 seo_prompt: |
   You write YouTube metadata for a {lang} dark romantic fantasy song called "{title}".
   Return STRICT JSON only:
-  {"title":"","description":"","tags":[]}
+  {{"title":"","description":"","tags":[]}}
   Title: max 62 chars, hook + emotion word + "Song", no clickbait lies.
   Description: 3 short paragraphs, hook line, 3 hashtags at end,
   plus "Best with headphones" and "AI-generated music".
