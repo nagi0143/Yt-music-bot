@@ -15,7 +15,7 @@ def gemini(prompt, json_out=True):
         json={"contents": [{"parts": [{"text": prompt}]}],
               "generationConfig": {"temperature": 1.0,
                 **({"responseMimeType": "application/json"} if json_out else {})}},
-        timeout=120
+        timeout=(30, 300)
     )
 
     if not r.ok:
