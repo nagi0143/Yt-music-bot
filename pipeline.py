@@ -5,55 +5,40 @@ from pathlib import Path
 CFG = yaml.safe_load(open("config.yaml"))
 STATE = json.load(open("state.json")) if Path("state.json").exists() else {"i": 0}
 GEMINI = os.environ["GEMINI_KEY"]
+FREEAI = os.environ["FREEAI_KEY"]
 WORK = Path("work"); WORK.mkdir(exist_ok=True)
 
-
+MODELS = ["gemini-3.8-flash", "gemini-3-flash", "gemini-2.5-flash"]
 
 def gemini(prompt, json_out=True):
-    url = (
-        "https://generativelanguage.googleapis.com/v1beta/models/"
-        f"gemini-3.8-flash:generateContent?key={GEMINI}"
-    )
-
-    for attempt in range(5):
-        try:
-            r = requests.post(
-                url,
-                json={
+    last = None
+    for model in MODELS:
+        url = ("https://generativelanguage.googleapis.com/v1beta/models/"
+               f"{model}:generateContent?key={GEMINI}")
+        for attempt in range(3):
+            try:
+                r = requests.post(url, json={
                     "contents": [{"parts": [{"text": prompt}]}],
                     "generationConfig": {
-                        "temperature": 1.0,
-                        "maxOutputTokens": 4096,
+                        "temperature": 1.0, "maxOutputTokens": 4096,
                         **({"responseMimeType": "application/json"} if json_out else {})
-                    }
-                },
-                timeout=(30, 300)
-            )
+                    }}, timeout=(30, 180))
+            except (requests.exceptions.Timeout, requests.exceptions.ConnectionError):
+                time.sleep(10 * (attempt + 1)); continue
 
             if r.status_code in (429, 500, 502, 503, 504):
-                print("GEMINI TEMPORARY ERROR:", r.status_code, r.text)
-                if attempt < 4:
-                    wait = 15 * (attempt + 1)
-                    print(f"Retrying in {wait} seconds...")
-                    time.sleep(wait)
-                    continue
-
+                last = r.text
+                print(f"{model} busy ({r.status_code}), retry {attempt+1}")
+                time.sleep(10 * (attempt + 1)); continue
+            if r.status_code == 404:
+                print(f"{model} not found, next model"); break
             if not r.ok:
-                print("GEMINI ERROR:", r.status_code, r.text)
-                r.raise_for_status()
+                print("GEMINI ERROR:", r.status_code, r.text); r.raise_for_status()
 
             txt = r.json()["candidates"][0]["content"]["parts"][0]["text"]
+            txt = txt.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
             return json.loads(txt) if json_out else txt
-
-        except (requests.exceptions.Timeout,
-                requests.exceptions.ConnectionError):
-            if attempt == 4:
-                raise
-            wait = 15 * (attempt + 1)
-            print(f"Gemini connection retry in {wait} seconds...")
-            time.sleep(wait)
-
-
+    raise RuntimeError(f"All gemini models failed: {last}")
 
 def pick():
     i = STATE["i"] % len(CFG["languages"])
@@ -63,27 +48,42 @@ def pick():
     json.dump(STATE, open("state.json", "w"))
     return lang, theme
 
-
 def music(style, lyric_text):
     r = requests.post(
-        "https://api.elevenlabs.io/v1/music",
-        headers={
-            "xi-api-key": os.environ["ELEVEN_KEY"],
-            "Content-Type": "application/json"
-        },
-        json={
-            "prompt": f"{style}. {lyric_text[:1200]}",
-            "music_length_ms": CFG["duration_sec"] * 1000
-        },
-        timeout=(30, 300)
-    )
-
+        "https://api.free.ai/v1/music/generate/",
+        headers={"Authorization": f"Bearer {FREEAI}",
+                 "Content-Type": "application/json"},
+        json={"prompt": f"{style}. Dark romantic, emotional, clear intimate lead vocal.",
+              "lyrics": lyric_text, "duration": 120, "bpm": 84,
+              "instrumental": False},
+        timeout=(30, 300))
     if not r.ok:
-        print("ELEVENLABS ERROR:", r.status_code, r.text)
+        print("FREEAI ERROR:", r.status_code, r.text)
         r.raise_for_status()
 
-    return r.content
+    d = r.json()
+    url = d.get("audio_url") or d.get("url")
+    job = d.get("job_id") or d.get("id")
 
+    for _ in range(90):
+        if url: break
+        if not job: break
+        time.sleep(10)
+        s = requests.get(f"https://api.free.ai/v1/status/{job}/",
+                         headers={"Authorization": f"Bearer {FREEAI}"}, timeout=60)
+        j = s.json() if s.ok else {}
+        url = j.get("audio_url") or (j.get("result") or {}).get("audio_url")
+        if str(j.get("status", "")).lower() in ("failed", "error"):
+            raise RuntimeError(f"music job failed: {j}")
+
+    if not url:
+        raise RuntimeError(f"no audio url in response: {d}")
+
+    raw = requests.get(url, timeout=300); raw.raise_for_status()
+    (WORK / "raw_audio").write_bytes(raw.content)
+    subprocess.run(["ffmpeg", "-y", "-i", str(WORK / "raw_audio"),
+                    "-c:a", "libmp3lame", "-b:a", "256k",
+                    str(WORK / "song.mp3")], check=True)
 
 def cover(theme):
     q = urllib.parse.quote(
@@ -125,7 +125,8 @@ def main():
     lang, theme = pick()
     print("LANG:", lang, "| THEME:", theme)
     meta = gemini(CFG["lyrics_prompt"].format(lang=lang, theme=theme))
-    (WORK / "song.mp3").write_bytes(music(meta["style_prompt"], meta["lyrics"]))
+    print("TITLE:", meta["title"])
+    music(meta["style_prompt"], meta["lyrics"])
     cover(theme)
     thumbnail(meta["title"])
     video()
