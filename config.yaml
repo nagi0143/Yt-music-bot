@@ -1,37 +1,67 @@
-channel: "Midnight Verses"
-languages: [english, hindi, english, spanish, hindi, portuguese, japanese, korean]
+QUEUE_RETRIES = 10
+QUEUE_SLEEP = 200
 
-themes:
-  - "two lovers who can only meet in dreams"
-  - "a ghost waiting at the same bus stop every night"
-  - "promising to find each other in the next life"
-  - "loving someone who is already gone"
-  - "a city that remembers your name after you leave"
-  - "borrowed time, one last monsoon night"
-  - "a heart that beats in someone else's chest"
-  - "the moon as the only witness"
 
-genre_style: "dark romantic fantasy pop, trap-soul drums, cinematic indie, warm analog mix, 84 bpm, intimate close vocal"
-music_duration: 120
-loudness_lufs: -14
+def music(style, lyric_text):
+    payload = {
+        "prompt": f"{style}. Dark romantic, emotional, clear intimate "
+                  "lead vocal, wide cinematic mix.",
+        "lyrics": lyric_text,
+        "duration": MUSIC_SECONDS,
+        "bpm": 84,
+        "instrumental": False,
+    }
+    headers = {"Authorization": f"Bearer {FREEAI}",
+               "Content-Type": "application/json"}
 
-lyrics_prompt: |
-  You are a professional {lang} songwriter. Write a song with this structure:
-  verse 1 (4 lines) / pre-chorus (2 lines) / chorus (4 lines) / verse 2 (4 lines) /
-  chorus (4 lines) / bridge (2 lines) / final chorus (4 lines).
-  Theme: {theme}
-  Genre: dark romantic fantasy pop with trap-soul rhythm.
-  Rules: first person, intimate, concrete imagery (rain, neon, ruins, moonlight,
-  velvet, static, ghosts, ash), one 4-word hook repeated in every chorus,
-  short lines that breathe, NO cliches like "you're my everything".
-  Output STRICT JSON only:
-  {{"title":"","hook":"","lyrics":"","style_prompt":"","bpm":0,"thumb_text":"","description_hook":""}}
+    d = None
+    for attempt in range(1, QUEUE_RETRIES + 1):
+        r = requests.post("https://api.free.ai/v1/music/generate/",
+                          headers=headers, json=payload, timeout=(30, 300))
 
-seo_prompt: |
-  You write YouTube metadata for a {lang} dark romantic fantasy song called "{title}".
-  Return STRICT JSON only:
-  {{"title":"","description":"","tags":[]}}
-  Title: max 62 chars, hook + emotion word + "Song", no clickbait lies.
-  Description: 3 short paragraphs, hook line, 3 hashtags at end,
-  plus "Best with headphones" and "AI-generated music".
-  Tags: 25 items, mix of broad and long-tail, in {lang} and English.
+        if r.status_code == 429 and "queue_at_capacity" in r.text:
+            wait = QUEUE_SLEEP + random.randint(0, 120)
+            print(f"queue full ({attempt}/{QUEUE_RETRIES}), waiting {wait}s")
+            time.sleep(wait)
+            continue
+
+        if r.status_code == 402:
+            print("TOKENS KHATAM:", r.text[:300])
+            raise RuntimeError("free.ai tokens exhausted")
+
+        if not r.ok:
+            print("FREEAI MUSIC ERROR:", r.status_code, r.text[:500])
+            r.raise_for_status()
+
+        d = r.json()
+        break
+    else:
+        raise RuntimeError("music queue stayed full the whole time")
+
+    print("MUSIC RESPONSE KEYS:", list(d.keys()))
+    url = d.get("audio_url") or d.get("url")
+    job = d.get("job_id") or d.get("id")
+
+    for _ in range(90):
+        if url:
+            break
+        if not job:
+            break
+        time.sleep(10)
+        s = requests.get(f"https://api.free.ai/v1/status/{job}/",
+                         headers={"Authorization": f"Bearer {FREEAI}"},
+                         timeout=60)
+        j = s.json() if s.ok else {}
+        url = j.get("audio_url") or (j.get("result") or {}).get("audio_url")
+        if str(j.get("status", "")).lower() in ("failed", "error"):
+            raise RuntimeError(f"music job failed: {j}")
+
+    if not url:
+        raise RuntimeError(f"no audio url in response: {d}")
+
+    raw = requests.get(url, timeout=300)
+    raw.raise_for_status()
+    (WORK / "raw_audio").write_bytes(raw.content)
+    subprocess.run(["ffmpeg", "-y", "-i", str(WORK / "raw_audio"),
+                    "-c:a", "libmp3lame", "-b:a", "256k",
+                    str(WORK / "song.mp3")], check=True)
