@@ -52,15 +52,27 @@ def pick():
     json.dump(STATE, open("state.json", "w"))
     return lang, theme
 
+
 def music(style, lyric_text):
     r = requests.post(
         "https://api.elevenlabs.io/v1/music",
-        headers={"xi-api-key": os.environ["ELEVEN_KEY"]},
-        json={"prompt": f"{style}. {lyric_text[:1200]}",
-              "music_length_ms": CFG["duration_sec"] * 1000},
-        timeout=600)
-    r.raise_for_status()
+        headers={
+            "xi-api-key": os.environ["ELEVEN_KEY"],
+            "Content-Type": "application/json"
+        },
+        json={
+            "prompt": f"{style}. {lyric_text[:1200]}",
+            "music_length_ms": CFG["duration_sec"] * 1000
+        },
+        timeout=(30, 300)
+    )
+
+    if not r.ok:
+        print("ELEVENLABS ERROR:", r.status_code, r.text)
+        r.raise_for_status()
+
     return r.content
+
 
 def cover(theme):
     q = urllib.parse.quote(
