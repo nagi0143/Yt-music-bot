@@ -11,7 +11,7 @@ WORK = Path("work"); WORK.mkdir(exist_ok=True)
 def gemini(prompt, json_out=True):
     r = requests.post(
         "https://generativelanguage.googleapis.com/v1beta/models/"
-        f"gemini-2.5-flash:generateContent?key={GEMINI}",
+        f"gemini-3.8-flash:generateContent?key={GEMINI}",
         json={"contents": [{"parts": [{"text": prompt}]}],
               "generationConfig": {"temperature": 1.0,
                 **({"responseMimeType": "application/json"} if json_out else {})}},
