@@ -7,6 +7,7 @@ STATE = json.load(open("state.json")) if Path("state.json").exists() else {"i": 
 GEMINI = os.environ["GEMINI_KEY"]
 WORK = Path("work"); WORK.mkdir(exist_ok=True)
 
+
 def gemini(prompt, json_out=True):
     r = requests.post(
         "https://generativelanguage.googleapis.com/v1beta/models/"
@@ -14,11 +15,13 @@ def gemini(prompt, json_out=True):
         json={"contents": [{"parts": [{"text": prompt}]}],
               "generationConfig": {"temperature": 1.0,
                 **({"responseMimeType": "application/json"} if json_out else {})}},
-        timeout=120)
+        timeout=120
+    )
+
     if not r.ok:
-    print("GEMINI ERROR:", r.status_code, r.text)
-    
-    r.raise_for_status()
+        print("GEMINI ERROR:", r.status_code, r.text)
+        r.raise_for_status()
+
     txt = r.json()["candidates"][0]["content"]["parts"][0]["text"]
     return json.loads(txt) if json_out else txt
 
