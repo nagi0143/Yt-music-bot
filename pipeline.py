@@ -9,21 +9,40 @@ WORK = Path("work"); WORK.mkdir(exist_ok=True)
 
 
 def gemini(prompt, json_out=True):
-    r = requests.post(
+    url = (
         "https://generativelanguage.googleapis.com/v1beta/models/"
-        f"gemini-3.8-flash:generateContent?key={GEMINI}",
-        json={"contents": [{"parts": [{"text": prompt}]}],
-              "generationConfig": {"temperature": 1.0,
-                **({"responseMimeType": "application/json"} if json_out else {})}},
-        timeout=(30, 300)
+        f"gemini-3.8-flash:generateContent?key={GEMINI}"
     )
 
-    if not r.ok:
-        print("GEMINI ERROR:", r.status_code, r.text)
-        r.raise_for_status()
+    for attempt in range(3):
+        try:
+            r = requests.post(
+                url,
+                json={
+                    "contents": [{"parts": [{"text": prompt}]}],
+                    "generationConfig": {
+                        "temperature": 1.0,
+                        "maxOutputTokens": 4096,
+                        **({"responseMimeType": "application/json"} if json_out else {})
+                    }
+                },
+                timeout=(30, 300)
+            )
 
-    txt = r.json()["candidates"][0]["content"]["parts"][0]["text"]
-    return json.loads(txt) if json_out else txt
+            if not r.ok:
+                print("GEMINI ERROR:", r.status_code, r.text)
+                r.raise_for_status()
+
+            txt = r.json()["candidates"][0]["content"]["parts"][0]["text"]
+            return json.loads(txt) if json_out else txt
+
+        except (requests.exceptions.Timeout,
+                requests.exceptions.ConnectionError):
+            if attempt == 2:
+                raise
+            print(f"Gemini timeout. Retrying {attempt + 1}/2...")
+            time.sleep(15 * (attempt + 1))
+
 
 def pick():
     i = STATE["i"] % len(CFG["languages"])
