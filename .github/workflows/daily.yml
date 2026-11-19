@@ -1,34 +1,37 @@
-name: daily-song
-on:
-  schedule:
-    - cron: "30 18 * * *"   # 12:00 AM IST
-    - cron: "30 2 * * *"    # 8:00 AM IST
-  workflow_dispatch:
-jobs:
-  make:
-    runs-on: ubuntu-latest
-    timeout-minutes: 120
-    permissions: { contents: write }
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with: { python-version: "3.11" }
-      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
-      - run: pip install -r requirements.txt
-      - run: mkdir -p assets && curl -L "https://raw.githubusercontent.com/google/fonts/main/ofl/anton/Anton%5Bwght%5D.ttf" -o assets/Anton-Regular.ttf
-      - run: python pipeline.py
-        env:
-          GEMINI_KEY: ${{ secrets.GEMINI_KEY }}
-          ELEVEN_KEY: ${{ secrets.ELEVEN_KEY }}
-          FREEAI_KEY: ${{ secrets.FREEAI_KEY }}
-      - run: python upload.py
-        env:
-          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
-          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
-          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
-      - run: |
-          git config user.name bot
-          git config user.email bot@x.com
-          git add state.json
-          git commit -m "state" || true
-          git push
+channel: 'Midnight Verses'
+music_duration: 120
+languages: [english, hindi, english, spanish, hindi, portuguese, japanese, korean]
+
+themes:
+  - 'two lovers who can only meet in dreams'
+  - 'a ghost waiting at the same bus stop every night'
+  - 'promising to find each other in the next life'
+  - 'loving someone who is already gone'
+  - 'a city that remembers your name after you leave'
+  - 'borrowed time, one last monsoon night'
+  - 'a heart that beats in someone else chest'
+  - 'the moon as the only witness'
+
+genre_style: 'dark romantic fantasy pop, trap-soul drums, cinematic indie, warm analog mix, 84 bpm, intimate close vocal'
+loudness_lufs: -14
+
+lyrics_prompt: |
+  You are a professional {lang} songwriter. Write a song with this structure:
+  verse 1 (4 lines) / pre-chorus (2 lines) / chorus (4 lines) / verse 2 (4 lines) /
+  chorus (4 lines) / bridge (2 lines) / final chorus (4 lines).
+  Theme: {theme}
+  Genre: dark romantic fantasy pop with trap-soul rhythm.
+  Rules: first person, intimate, concrete imagery (rain, neon, ruins, moonlight,
+  velvet, static, ghosts, ash), one 4-word hook repeated in every chorus,
+  short lines that breathe, NO cliches like "you are my everything".
+  Output STRICT JSON only:
+  {"title":"","hook":"","lyrics":"","style_prompt":"","bpm":0,"thumb_text":""}
+
+seo_prompt: |
+  You write YouTube metadata for a {lang} dark romantic fantasy song called "{title}".
+  Return STRICT JSON only:
+  {"title":"","description":"","tags":[]}
+  Title: max 62 chars, hook + emotion word + Song, no clickbait lies.
+  Description: 3 short paragraphs, hook line, 3 hashtags at end,
+  plus "Best with headphones" and "AI-generated music".
+  Tags: 25 items, mix of broad and long-tail, in {lang} and English.
