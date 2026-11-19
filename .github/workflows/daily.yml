@@ -1,0 +1,48 @@
+name: daily-song
+
+on:
+  schedule:
+    - cron: "30 18 * * *"
+    - cron: "30 2 * * *"
+  workflow_dispatch:
+
+jobs:
+  make:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    permissions: { contents: write }
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+
+      - run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - run: pip install -r requirements.txt
+
+      - name: font
+        run: |
+          mkdir -p assets
+          curl -fsSL "https://raw.githubusercontent.com/google/fonts/main/ofl/anton/Anton%5Bwght%5D.ttf" -o assets/Anton-Regular.ttf
+
+      - run: python pipeline.py
+        env:
+          GEMINI_KEY: ${{ secrets.GEMINI_KEY }}
+          ELEVEN_KEY: ${{ secrets.ELEVEN_KEY }}
+          FREEAI_KEY: ${{ secrets.FREEAI_KEY }}
+
+      - run: python upload.py
+        env:
+          YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
+          YT_CLIENT_ID: ${{ secrets.YT_CLIENT_ID }}
+          YT_CLIENT_SECRET: ${{ secrets.YT_CLIENT_SECRET }}
+
+      - name: save state
+        if: always()
+        run: |
+          git config user.name bot
+          git config user.email bot@x.com
+          git add state.json
+          git commit -m "state" || true
+          git push || true
