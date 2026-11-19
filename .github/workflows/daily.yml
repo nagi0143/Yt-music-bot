@@ -1,7 +1,8 @@
 name: daily-song
 on:
   schedule:
-    - cron: "0 6 * * *"
+    - cron: "30 18 * * *"   # 12:00 AM IST
+    - cron: "30 2 * * *"    # 8:00 AM IST
   workflow_dispatch:
 jobs:
   make:
