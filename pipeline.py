@@ -203,16 +203,18 @@ def thumbnail(title):
     ov = Image.new("RGBA", im.size, (0, 0, 0, 0))
     d = ImageDraw.Draw(ov)
     d.rectangle([0, 430, 1280, 720], fill=(0, 0, 0, 165))
-    try:
-        font = None
+    
+    font = None
     for path in (FONT, "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"):
         try:
             font = ImageFont.truetype(path, 92)
             break
         except Exception:
             continue
+
     if font is None:
         font = ImageFont.load_default()
+
     d.text((60, 495), title.upper()[:26], font=font, fill=(255, 245, 230, 255))
     Image.alpha_composite(im.convert("RGBA"), ov).convert("RGB").save(
         WORK / "thumb.jpg", quality=92)
