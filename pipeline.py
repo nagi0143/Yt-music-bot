@@ -8,13 +8,14 @@ GEMINI = os.environ["GEMINI_KEY"]
 WORK = Path("work"); WORK.mkdir(exist_ok=True)
 
 
+
 def gemini(prompt, json_out=True):
     url = (
         "https://generativelanguage.googleapis.com/v1beta/models/"
         f"gemini-3.8-flash:generateContent?key={GEMINI}"
     )
 
-    for attempt in range(3):
+    for attempt in range(5):
         try:
             r = requests.post(
                 url,
@@ -29,6 +30,14 @@ def gemini(prompt, json_out=True):
                 timeout=(30, 300)
             )
 
+            if r.status_code in (429, 500, 502, 503, 504):
+                print("GEMINI TEMPORARY ERROR:", r.status_code, r.text)
+                if attempt < 4:
+                    wait = 15 * (attempt + 1)
+                    print(f"Retrying in {wait} seconds...")
+                    time.sleep(wait)
+                    continue
+
             if not r.ok:
                 print("GEMINI ERROR:", r.status_code, r.text)
                 r.raise_for_status()
@@ -38,10 +47,12 @@ def gemini(prompt, json_out=True):
 
         except (requests.exceptions.Timeout,
                 requests.exceptions.ConnectionError):
-            if attempt == 2:
+            if attempt == 4:
                 raise
-            print(f"Gemini timeout. Retrying {attempt + 1}/2...")
-            time.sleep(15 * (attempt + 1))
+            wait = 15 * (attempt + 1)
+            print(f"Gemini connection retry in {wait} seconds...")
+            time.sleep(wait)
+
 
 
 def pick():
