@@ -18,6 +18,7 @@ jobs:
         env:
           GEMINI_KEY: ${{ secrets.GEMINI_KEY }}
           ELEVEN_KEY: ${{ secrets.ELEVEN_KEY }}
+          FREEAI_KEY: ${{ secrets.FREEAI_KEY }}
       - run: python upload.py
         env:
           YT_REFRESH_TOKEN: ${{ secrets.YT_REFRESH_TOKEN }}
