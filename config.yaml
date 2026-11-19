@@ -12,7 +12,7 @@ themes:
   - "the moon as the only witness"
 
 genre_style: "dark romantic fantasy pop, trap-soul drums, cinematic indie, warm analog mix, 84 bpm, intimate close vocal"
-duration_sec: 150
+music_duration: 120
 loudness_lufs: -14
 
 lyrics_prompt: |
