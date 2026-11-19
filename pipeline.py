@@ -15,6 +15,9 @@ def gemini(prompt, json_out=True):
               "generationConfig": {"temperature": 1.0,
                 **({"responseMimeType": "application/json"} if json_out else {})}},
         timeout=120)
+    if not r.ok:
+    print("GEMINI ERROR:", r.status_code, r.text)
+    
     r.raise_for_status()
     txt = r.json()["candidates"][0]["content"]["parts"][0]["text"]
     return json.loads(txt) if json_out else txt
