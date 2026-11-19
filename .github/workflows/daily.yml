@@ -24,7 +24,8 @@ jobs:
       - name: font
         run: |
           mkdir -p assets
-          curl -fsSL "https://raw.githubusercontent.com/google/fonts/main/ofl/anton/Anton%5Bwght%5D.ttf" -o assets/Anton-Regular.ttf
+          curl -fsSL "https://raw.githubusercontent.com/google/fonts/main/ofl/anton/Anton-Regular.ttf" -o assets/Anton-Regular.ttf \
+            || cp /usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf assets/Anton-Regular.ttf
 
       - run: python pipeline.py
         env:
