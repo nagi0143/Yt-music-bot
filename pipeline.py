@@ -138,50 +138,103 @@ def pick():
     return lang, theme
 
 
+
 def music(style, lyric_text):
+    base = "https://api.free.ai"
+
     r = requests.post(
-        "https://api.free.ai/v1/music/generate/",
-        headers={"Authorization": f"Bearer {FREEAI}",
-                 "Content-Type": "application/json"},
-        json={"prompt": f"{style}. Dark romantic, emotional, clear intimate "
-                        "lead vocal, wide cinematic mix.",
-              "lyrics": lyric_text,
-              "duration": MUSIC_SECONDS,
-              "bpm": 84,
-              "instrumental": False},
-        timeout=(30, 300))
+        f"{base}/v1/music/generate/",
+        headers={
+            "Authorization": f"Bearer {FREEAI}",
+            "Content-Type": "application/json"
+        },
+        json={
+            "prompt": f"{style}. Dark romantic, emotional, clear intimate "
+                      "lead vocal, wide cinematic mix.",
+            "lyrics": lyric_text,
+            "duration": MUSIC_SECONDS,
+            "bpm": 84,
+            "instrumental": False
+        },
+        timeout=(30, 300)
+    )
+
     if not r.ok:
         print("FREEAI MUSIC ERROR:", r.status_code, r.text[:500])
         r.raise_for_status()
 
     d = r.json()
-    print("MUSIC RESPONSE KEYS:", list(d.keys()))
+    print("MUSIC RESPONSE:", d)
+
     url = d.get("audio_url") or d.get("url")
+    poll_url = d.get("poll_url")
     job = d.get("job_id") or d.get("id")
 
-    for _ in range(90):
+    # Handle queued jobs
+    if d.get("queued") and poll_url:
+        poll_url = (
+            poll_url if poll_url.startswith("http")
+            else base + poll_url
+        )
+
+    elif job and not url:
+        poll_url = f"{base}/api/v1/jobs/{job}/"
+
+    # Poll until audio is ready
+    for attempt in range(180):
         if url:
             break
-        if not job:
+
+        if not poll_url:
             break
+
         time.sleep(10)
+
         s = requests.get(
-            f"https://api.free.ai/v1/status/{job}/",
-            headers={"Authorization": f"Bearer {FREEAI}"}, timeout=60)
-        j = s.json() if s.ok else {}
-        url = j.get("audio_url") or (j.get("result") or {}).get("audio_url")
-        if str(j.get("status", "")).lower() in ("failed", "error"):
-            raise RuntimeError(f"music job failed: {j}")
+            poll_url,
+            headers={"Authorization": f"Bearer {FREEAI}"},
+            timeout=60
+        )
+
+        if not s.ok:
+            print("JOB STATUS ERROR:", s.status_code, s.text[:500])
+            s.raise_for_status()
+
+        j = s.json()
+        print("MUSIC JOB STATUS:", j)
+
+        url = (
+            j.get("audio_url")
+            or j.get("url")
+            or (j.get("result") or {}).get("audio_url")
+            or (j.get("result") or {}).get("url")
+        )
+
+        status = str(j.get("status", "")).lower()
+
+        if status in ("failed", "error", "cancelled"):
+            raise RuntimeError(f"Music generation failed: {j}")
 
     if not url:
-        raise RuntimeError(f"no audio url in response: {d}")
+        raise RuntimeError(
+            f"Music audio not ready after polling. Initial response: {d}"
+        )
 
     raw = requests.get(url, timeout=300)
     raw.raise_for_status()
+
     (WORK / "raw_audio").write_bytes(raw.content)
-    subprocess.run(["ffmpeg", "-y", "-i", str(WORK / "raw_audio"),
-                    "-c:a", "libmp3lame", "-b:a", "256k",
-                    str(WORK / "song.mp3")], check=True)
+
+    subprocess.run([
+        "ffmpeg", "-y",
+        "-i", str(WORK / "raw_audio"),
+        "-c:a", "libmp3lame",
+        "-b:a", "256k",
+        str(WORK / "song.mp3")
+    ], check=True)
+
+    print("MUSIC DOWNLOAD SUCCESSFUL!")
+
 
 
 def cover(theme):
