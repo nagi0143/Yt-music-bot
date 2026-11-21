@@ -1,9 +1,13 @@
 import json, os
+from pathlib import Path
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.http import MediaFileUpload
 
-M = json.load(open("work/meta.json"))
+M = json.load(open("work/meta.json", encoding="utf-8"))
+STATE = json.load(open("state.json", encoding="utf-8")) if Path("state.json").exists() else {"i": 0, "done": []}
+STATE.setdefault("done", [])
+
 creds = Credentials(
     None, refresh_token=os.environ["YT_REFRESH_TOKEN"],
     token_uri="https://oauth2.googleapis.com/token",
@@ -26,4 +30,12 @@ while res is None:
 
 yt.thumbnails().set(videoId=res["id"],
     media_body=MediaFileUpload("work/thumb.jpg")).execute()
-print("UPLOADED:", res["id"])
+
+used = Path("work/used.txt")
+if used.exists():
+    name = used.read_text(encoding="utf-8").strip()
+    if name and name not in STATE["done"]:
+        STATE["done"].append(name)
+    json.dump(STATE, open("state.json", "w", encoding="utf-8"))
+
+print("UPLOADED: https://youtu.be/" + res["id"])
