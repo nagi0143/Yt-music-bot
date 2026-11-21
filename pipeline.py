@@ -1,4 +1,4 @@
-import os, json, random, subprocess, urllib.parse, time
+import os, re, io, json, random, subprocess, urllib.parse, time
 import requests, yaml
 from pathlib import Path
 
@@ -9,6 +9,13 @@ GEMINI = os.environ["GEMINI_KEY"]
 WORK = Path("work"); WORK.mkdir(exist_ok=True)
 SONGS = Path("songs")
 FONT = "assets/Anton-Regular.ttf"
+
+STYLE = ("dark fantasy illustration, mysterious, ethereal glowing aura, moonlit mist, "
+         "cinematic lighting, rich detail, wide composition")
+
+SCRIPTS = [("hindi", 0x0900, 0x097F), ("punjabi", 0x0A00, 0x0A7F),
+           ("russian", 0x0400, 0x04FF), ("korean", 0xAC00, 0xD7AF),
+           ("japanese", 0x3040, 0x30FF)]
 
 _MODELS = []
 
@@ -89,18 +96,52 @@ def queue_files():
     return sorted(p for p in SONGS.glob("*.mp3") if p.name not in done)
 
 
-def resolve(f):
+def norm(s):
+    return re.sub(r"[\W_]+", "", s.lower())
+
+
+def find_lyrics(stem):
+    d = Path("lyrics")
+    if not d.exists():
+        return "", None
+    key = norm(stem)
+    for p in sorted(d.glob("*.txt")):
+        a = norm(p.stem)
+        if a and (a == key or (len(a) >= 12 and key.startswith(a))):
+            return p.read_text(encoding="utf-8"), p
+    return "", None
+
+
+def detect_lang(text):
+    letters = [c for c in text if c.isalpha()]
+    if not letters:
+        return "english"
+    best, share = "english", 0.0
+    for name, lo, hi in SCRIPTS:
+        n = sum(1 for c in letters if lo <= ord(c) <= hi)
+        if n / len(letters) > share:
+            best, share = name, n / len(letters)
+    return best if share > 0.25 else "english"
+
+
+def resolve(f, lyr):
     name = f.stem
     if "__" in name:
         lang, theme = name.split("__", 1)
         lang = lang.strip().replace("_", "+")
         theme = theme.strip().replace("_", " ")
-    else:
-        i = STATE["i"] % len(CFG["languages"])
-        lang = CFG["languages"][i]
-        STATE["i"] = i + 1
-        theme = CFG["themes"][random.randrange(len(CFG["themes"]))]
-    return lang, theme
+        return lang, theme, theme.title()
+    if lyr:
+        return detect_lang(lyr), "", name.strip()
+    return "english", "", name.strip()
+
+
+def build_title(song, tagline):
+    brand = CFG["channel"]
+    full = f"{song} | {tagline} | {brand}" if tagline else f"{song} | {brand}"
+    if len(full) > 100:
+        full = f"{song} | {brand}"
+    return full[:100]
 
 
 def prepare_audio(src):
@@ -121,37 +162,100 @@ def prepare_audio(src):
                     str(WORK / "song.mp3")], check=True)
 
 
-def cover(theme):
-    q = urllib.parse.quote(
-        f"cinematic dark romantic fantasy album art, {theme}, no text, "
-        "fog, moonlight, volumetric god rays, teal and amber grade, "
-        "35mm grain, wide composition, ultra detailed")
-    r = requests.get(f"https://image.pollinations.ai/prompt/{q}"
-                     f"?width=1920&height=1080&nologo=true&seed={random.randint(1, 999999)}",
-                     timeout=180)
-    r.raise_for_status()
-    (WORK / "cover.jpg").write_bytes(r.content)
+def cover(stem, image_prompt):
+    from PIL import Image, ImageOps
+
+    # 1) tumhari apni image: assets/<gaane ka naam>.jpg / .png / .webp
+    key = norm(stem)
+    assets = Path("assets")
+    if assets.exists():
+        for p in sorted(assets.glob("*")):
+            if p.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp") and norm(p.stem) == key:
+                im = Image.open(p).convert("RGB")
+                ImageOps.fit(im, (1920, 1080), centering=(0.5, 0.5)).save(
+                    WORK / "cover.jpg", quality=95)
+                print("COVER: manual image", p.name)
+                return
+
+    # 2) auto image (neeche ka 120px kat jata hai taaki watermark hat jaye)
+    q = urllib.parse.quote(f"{image_prompt}, {STYLE}")
+    last = None
+    for _ in range(3):
+        try:
+            r = requests.get(
+                f"https://image.pollinations.ai/prompt/{q}"
+                f"?width=1920&height=1200&model=flux&nologo=true&seed={random.randint(1, 999999)}",
+                timeout=180)
+            r.raise_for_status()
+            im = Image.open(io.BytesIO(r.content)).convert("RGB")
+            break
+        except Exception as e:
+            last = e
+            print("COVER RETRY:", e)
+            time.sleep(10)
+    else:
+        raise RuntimeError(f"cover generate nahi hua: {last}")
+
+    ImageOps.fit(im, (1920, 1080), centering=(0.5, 0.0)).save(WORK / "cover.jpg", quality=95)
+    print("COVER: auto image")
 
 
-def thumbnail(title):
-    from PIL import Image, ImageDraw, ImageFont
-    im = Image.open(WORK / "cover.jpg").convert("RGB").resize((1280, 720))
-    ov = Image.new("RGBA", im.size, (0, 0, 0, 0))
-    d = ImageDraw.Draw(ov)
-    d.rectangle([0, 430, 1280, 720], fill=(0, 0, 0, 165))
-
-    font = None
+def load_font(size):
+    from PIL import ImageFont
     for path in (FONT, "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"):
         try:
-            font = ImageFont.truetype(path, 92); break
+            return ImageFont.truetype(path, size)
         except Exception:
             continue
-    if font is None:
-        font = ImageFont.load_default()
+    return ImageFont.load_default()
 
-    d.text((60, 495), title.upper()[:26], font=font, fill=(255, 245, 230, 255))
-    Image.alpha_composite(im.convert("RGBA"), ov).convert("RGB").save(
-        WORK / "thumb.jpg", quality=92)
+
+def wrap(text, font, maxw, d):
+    lines, cur = [], ""
+    for w in text.split():
+        t = (cur + " " + w).strip()
+        if d.textlength(t, font=font) <= maxw:
+            cur = t
+        else:
+            if cur:
+                lines.append(cur)
+            cur = w
+    if cur:
+        lines.append(cur)
+    return lines
+
+
+def thumbnail(song):
+    from PIL import Image, ImageDraw
+    im = Image.open(WORK / "cover.jpg").convert("RGB").resize((1280, 720))
+
+    ov = Image.new("RGBA", im.size, (0, 0, 0, 0))
+    od = ImageDraw.Draw(ov)
+    for y in range(330, 720):
+        od.line([(0, y), (1280, y)], fill=(0, 0, 0, int(215 * (y - 330) / 390)))
+    im = Image.alpha_composite(im.convert("RGBA"), ov).convert("RGB")
+
+    d = ImageDraw.Draw(im)
+    text = song.upper()
+    maxw = 1160
+    size = 120
+    while True:
+        font = load_font(size)
+        lines = wrap(text, font, maxw, d)
+        fits = all(d.textlength(l, font=font) <= maxw for l in lines)
+        if (len(lines) <= 2 and fits) or size <= 48:
+            break
+        size -= 6
+
+    lh = int(size * 1.12)
+    y = 720 - 50 - lh * len(lines)
+    for line in lines:
+        d.text((63, y + 3), line, font=font, fill=(0, 0, 0))
+        d.text((60, y), line, font=font, fill=(255, 245, 230))
+        y += lh
+
+    d.text((60, 40), CFG["channel"], font=load_font(40), fill=(255, 245, 230))
+    im.save(WORK / "thumb.jpg", quality=92)
 
 
 def video():
@@ -181,33 +285,43 @@ def main():
     print("QUEUE:", len(files), "file(s) | picking:", f.name)
 
     prepare_audio(f)
-    lang, theme = resolve(f)
-    print("LANGUAGE:", lang)
-    print("THEME:", theme)
 
-    side = Path("lyrics") / (f.stem + ".txt")
-    lyr = side.read_text(encoding="utf-8")[:1500] if side.exists() else ""
+    lyr, lyr_file = find_lyrics(f.stem)
+    print("LYRICS:", lyr_file.name if lyr_file else "NOT FOUND (naam match nahi hua, sirf gaane ke naam se kaam chalega)")
+
+    lang, theme, song = resolve(f, lyr)
+    print("SONG:", song)
+    print("LANGUAGE:", lang)
 
     seo = gemini(CFG["seo_prompt"].format(
-        channel=CFG["channel"], lang=lang, theme=theme) + f"\n\nLyrics:\n{lyr}")
-    for k in ("title", "description", "tags"):
+        channel=CFG["channel"], artist=CFG["artist"], lang=lang, song=song,
+        theme=theme or "not given - work it out from the song name and lyrics")
+        + f"\n\nLyrics:\n{lyr[:2500]}")
+    for k in ("description", "tags"):
         if not seo.get(k):
             raise RuntimeError(f"seo missing {k}")
-    print("TITLE:", seo["title"])
 
-    cover(theme); thumbnail(seo["title"])
+    title = build_title(song, str(seo.get("tagline", "")).strip())
+    theme = str(seo.get("theme") or theme or song)
+    image_prompt = str(seo.get("image_prompt") or theme)
+    print("THEME:", theme)
+    print("TITLE:", title)
+    print("IMAGE PROMPT:", image_prompt)
+
+    cover(f.stem, image_prompt)
+    thumbnail(song)
     print("ART OK")
 
     video()
     print("VIDEO OK")
 
-    json.dump({"lang": lang, "theme": theme, "title": seo["title"],
+    json.dump({"lang": lang, "theme": theme, "title": title,
                "description": seo["description"], "tags": seo["tags"]},
               open(WORK / "meta.json", "w", encoding="utf-8"),
               ensure_ascii=False, indent=2)
 
     (WORK / "used.txt").write_text(f.name, encoding="utf-8")
-    print("READY:", seo["title"])
+    print("READY:", title)
 
 
 if __name__ == "__main__":
