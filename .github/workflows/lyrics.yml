@@ -1,0 +1,44 @@
+name: make-lyrics
+
+on:
+  workflow_dispatch:
+    inputs:
+      theme:
+        description: "Theme"
+        required: true
+      lang:
+        description: "english / hindi / english+spanish ..."
+        required: true
+        default: english
+      name:
+        description: "File name (khali = theme se ban jayega)"
+        required: false
+        default: ""
+
+jobs:
+  lyrics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions: { contents: write }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.11" }
+      - run: pip install -r requirements.txt
+      - name: generate
+        run: |
+          N="${{ github.event.inputs.name }}"
+          if [ -z "$N" ]; then
+            python lyrics.py "${{ github.event.inputs.theme }}" "${{ github.event.inputs.lang }}"
+          else
+            python lyrics.py "${{ github.event.inputs.theme }}" "${{ github.event.inputs.lang }}" "$N"
+          fi
+        env:
+          GEMINI_KEY: ${{ secrets.GEMINI_KEY }}
+      - name: save
+        run: |
+          git config user.name bot
+          git config user.email bot@x.com
+          git add -A lyrics
+          git commit -m "lyrics" || true
+          git push || true
