@@ -16,10 +16,17 @@ creds = Credentials(
     scopes=["https://www.googleapis.com/auth/youtube.upload"])
 yt = build("youtube", "v3", credentials=creds)
 
-body = {"snippet": {"title": M["title"][:100],
-                    "description": M["description"] + "\n\n#aimusic #darkromance #lovesong",
-                    "tags": M["tags"][:30], "categoryId": "10",
-                    "defaultLanguage": M["lang"]},
+LANGS = {"english": "en", "hindi": "hi", "spanish": "es", "punjabi": "pa", "urdu": "ur"}
+first = str(M.get("lang", "english")).lower().split("+")[0].strip()
+lang = LANGS.get(first, "en")
+
+tags = [t.replace("<", "").replace(">", "").strip()[:30] for t in M["tags"] if t.strip()][:15]
+desc = (M["description"] + "\n\n#aimusic #darkromance #lovesong").replace("<", "").replace(">", "")[:4900]
+
+body = {"snippet": {"title": M["title"].replace("<", "").replace(">", "")[:100],
+                    "description": desc,
+                    "tags": tags, "categoryId": "10",
+                    "defaultLanguage": lang},
         "status": {"privacyStatus": "public", "selfDeclaredMadeForKids": False}}
 
 req = yt.videos().insert(part="snippet,status", body=body,
