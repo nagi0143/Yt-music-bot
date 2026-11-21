@@ -1,166 +1,89 @@
+channel: 'Midnight Verses'
+artist: 'NOXVEILx9'
 
-channel: "Midnight Verses"
-
-languages: [english, hindi, english, spanish, hindi, portuguese, japanese, korean]
+languages:
+  - english
+  - hindi
+  - english+spanish
+  - english
+  - english+portuguese
+  - english
+  - english+russian
+  - hindi
+  - english
+  - english+korean
+  - english
+  - english+japanese
+  - english+arabic
+  - english
+  - english+indonesian
+  - english
+  - english+turkish
+  - english+italian
 
 themes:
-  - "two lovers who can only meet in dreams"
-  - "a ghost waiting at the same bus stop every night"
-  - "promising to find each other in the next life"
-  - "loving someone who is already gone"
-  - "a city that remembers your name after you leave"
-  - "borrowed time, one last monsoon night"
-  - "a heart that beats in someone else's chest"
-  - "the moon as the only witness"
+  - 'two lovers who can only meet in dreams'
+  - 'a ghost waiting at the same bus stop every night'
+  - 'promising to find each other in the next life'
+  - 'loving someone who is already gone'
+  - 'a city that remembers your name after you leave'
+  - 'borrowed time, one last monsoon night'
+  - 'a heart that beats in someone else chest'
+  - 'the moon as the only witness'
+  - 'meeting only in the five minutes before waking'
+  - 'a stranger who feels like a memory'
 
-# Permanent NOXVEILx9 musical identity
-master_style: |
-  Dark romantic fantasy pop fused with trap-soul,
-  cinematic indie and atmospheric electronic production.
-  Rich emotional melodies, deep punchy drums,
-  warm analog textures, haunting atmospheric layers,
-  intimate expressive vocals, immersive cinematic depth,
-  polished professional mixing and mastering.
-  Every song must have a recognizable NOXVEILx9 sound,
-  while maintaining its own original musical identity.
-
-# Base genre identity
-genre_style: |
-  dark romantic fantasy pop, trap-soul drums,
-  cinematic indie, atmospheric electronic,
-  warm analog mix, intimate close vocals.
-
-# Vocal selection rules
-vocal_rules: |
-  Only two vocal formats are allowed:
-  1. Male and female duet.
-  2. Female solo.
-
-  Never generate male solo vocals.
-
-  Male voice in duets:
-  Deep, youthful, powerful, warm and natural.
-  Avoid elderly-sounding, excessively heavy or rough vocals.
-
-  Female voice:
-  Soft, sweet, expressive, clear and natural.
-  Avoid excessively deep or robotic vocals.
-
-  In duets, both voices must have distinct parts
-  and natural vocal chemistry.
-  Never sing production instructions or role labels.
-
-# Music settings
-duration_sec: 150
 loudness_lufs: -14
 
-# Gemini songwriting instructions
-lyrics_prompt: |
-  You are a professional songwriter and music director
-  creating original songs for the Midnight Verses channel.
+scripts:
+  english: 'Latin alphabet'
+  hindi: 'Devanagari'
+  marathi: 'Devanagari'
+  punjabi: 'Gurmukhi'
+  urdu: 'Arabic script, Nastaliq style'
+  arabic: 'Arabic script'
+  russian: 'Cyrillic'
+  korean: 'Hangul'
+  japanese: 'Japanese, Kana with Kanji'
+  chinese: 'Simplified Chinese characters'
+  spanish: 'Latin alphabet with accents'
+  portuguese: 'Latin alphabet with accents'
+  italian: 'Latin alphabet'
+  turkish: 'Latin alphabet'
+  indonesian: 'Latin alphabet'
+  german: 'Latin alphabet'
+  french: 'Latin alphabet'
 
-  LANGUAGE: {lang}
-  THEME: {theme}
+native_names:
+  english: 'English'
+  hindi: 'हिन्दी (Hindi)'
+  marathi: 'मराठी (Marathi)'
+  punjabi: 'ਪੰਜਾਬੀ (Punjabi)'
+  urdu: 'اردو (Urdu)'
+  arabic: 'العربية (Arabic)'
+  russian: 'Русский (Russian)'
+  korean: '한국어 (Korean)'
+  japanese: '日本語 (Japanese)'
+  chinese: '中文 (Chinese)'
+  spanish: 'Español (Spanish)'
+  portuguese: 'Português (Portuguese)'
+  italian: 'Italiano (Italian)'
+  turkish: 'Türkçe (Turkish)'
+  indonesian: 'Bahasa Indonesia'
+  german: 'Deutsch (German)'
+  french: 'Français (French)'
 
-  PERMANENT MUSICAL IDENTITY:
-  Dark romantic fantasy pop fused with trap-soul,
-  cinematic indie and atmospheric electronic production.
-  Rich emotional melodies, deep punchy drums,
-  warm analog textures, haunting atmospheric layers,
-  intimate expressive vocals and polished professional mixing.
-
-  VOCAL RULES:
-  Choose exactly one vocal format for each song:
-  - Male + female duet
-  - Female solo
-
-  Never create male solo songs.
-
-  Male voice in duets must sound deep, youthful,
-  powerful, warm and natural, never elderly.
-  Female voice must sound soft, sweet, expressive
-  and natural, never excessively deep.
-
-  Duets must have clearly differentiated male
-  and female vocal sections with natural chemistry.
-  Female solo songs must contain only female vocals.
-
-  SONGWRITING:
-  Structure:
-  Verse 1 (4 lines)
-  Pre-chorus (2 lines)
-  Chorus (4 lines)
-  Verse 2 (4 lines)
-  Chorus (4 lines)
-  Bridge (2 lines)
-  Final chorus (4 lines)
-
-  Write original lyrics in the requested language.
-  Use first-person storytelling and concrete imagery
-  such as rain, neon, ruins, moonlight, velvet,
-  static, ghosts and ash.
-
-  Create one memorable four-word hook.
-  Repeat the exact hook in every chorus.
-  Use short, naturally singable lines.
-  Avoid generic romantic cliches.
-
-  MUSICAL VARIATION:
-  Keep the permanent NOXVEILx9 sound identity,
-  but create a fresh melody, rhythm, arrangement,
-  emotional atmosphere and instrumental progression
-  for every song.
-
-  BPM can vary naturally between 78 and 105.
-  Do not force every song into the same melody,
-  arrangement or emotional intensity.
-
-  IMPORTANT:
-  Do not include production instructions,
-  vocal labels or prompt explanations inside lyrics.
-  Vocal assignments must be described separately.
-
-  Return STRICT JSON only:
-  {{
-    "title": "",
-    "hook": "",
-    "lyrics": "",
-    "vocal_mode": "duet or female_solo",
-    "style_prompt": "",
-    "bpm": 0,
-    "thumb_text": "",
-    "description_hook": ""
-  }}
-
-# YouTube SEO instructions
 seo_prompt: |
-  You write professional YouTube metadata for a
-  dark romantic fantasy music channel.
+  You write professional YouTube metadata for the {channel} channel.
 
   Language: {lang}
-  Song title: "{title}"
+  Theme of the song: {theme}
 
   Return STRICT JSON only:
   {{"title":"","description":"","tags":[]}}
 
-  TITLE:
-  Maximum 62 characters.
-  Emotion-focused, natural and searchable.
-  No misleading clickbait.
-
-  DESCRIPTION:
-  Three short paragraphs.
-  Include an emotional hook line.
-  Include "Best with headphones".
-  Include "AI-generated music".
-  End with exactly 3 relevant hashtags.
-
-  COPYRIGHT:
-  Do not falsely claim ownership of music,
-  lyrics or samples.
-  Do not invent licensing or ownership claims.
-
-  TAGS:
-  Return 25 relevant tags.
-  Mix broad and long-tail search terms.
-  Include both {lang} and English keywords.
+  TITLE: max 62 characters, emotion-focused, searchable, no clickbait.
+  DESCRIPTION: three short paragraphs, one emotional hook line,
+  include "Best with headphones", include "AI-generated music",
+  end with exactly 3 hashtags. Do not invent licensing claims.
+  TAGS: 25 relevant tags, broad plus long-tail, in {lang} and English.
