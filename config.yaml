@@ -1,4 +1,4 @@
-channel: 'Midnight Verses'
+channel: 'NOXVEIL'
 artist: 'NOXVEILx9'
 
 languages:
@@ -74,16 +74,21 @@ native_names:
   french: 'Français (French)'
 
 seo_prompt: |
-  You write professional YouTube metadata for the {channel} channel.
+  You write professional YouTube metadata for the music artist {artist} (channel name: {channel}).
 
-  Language: {lang}
-  Theme of the song: {theme}
+  Song name: {song}
+  Vocal language: {lang}
+  Story hint: {theme}
+  The real lyrics are given at the end of this message. Base everything on the real story of the lyrics.
 
   Return STRICT JSON only:
-  {{"title":"","description":"","tags":[]}}
+  {{"tagline":"","description":"","tags":[],"image_prompt":"","theme":""}}
 
-  TITLE: max 62 characters, emotion-focused, searchable, no clickbait.
-  DESCRIPTION: three short paragraphs, one emotional hook line,
-  include "Best with headphones", include "AI-generated music",
-  end with exactly 3 hashtags. Do not invent licensing claims.
+  TAGLINE: 3 to 6 words in English that say what the song is, for example "Hindi Dark Romantic Song". No channel or artist names.
+  DESCRIPTION: three short paragraphs. Paragraph 1: one emotional hook line about this song's story.
+  Paragraph 2: two or three lines about the feeling and story, in English, plus one line in {lang} if it is not English.
+  Paragraph 3: "Best with headphones. AI-generated music. By {artist}."
+  End with exactly 3 hashtags. Do not invent licensing claims and do not mention any other channel name.
   TAGS: 25 relevant tags, broad plus long-tail, in {lang} and English.
+  IMAGE_PROMPT: one vivid dark fantasy scene in English, max 40 words, showing the real story of the song with symbols from the lyrics (a lone silhouette, moon, mist, glowing aura). Describe only what to draw, no text or letters in the picture.
+  THEME: the song theme in 6 words or fewer, English.
