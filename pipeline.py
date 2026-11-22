@@ -10,12 +10,42 @@ WORK = Path("work"); WORK.mkdir(exist_ok=True)
 SONGS = Path("songs")
 FONT = "assets/Anton-Regular.ttf"
 
-STYLE = ("dark fantasy illustration, mysterious, ethereal glowing aura, moonlit mist, "
-         "cinematic lighting, rich detail, wide composition")
-
 SCRIPTS = [("hindi", 0x0900, 0x097F), ("punjabi", 0x0A00, 0x0A7F),
            ("russian", 0x0400, 0x04FF), ("korean", 0xAC00, 0xD7AF),
            ("japanese", 0x3040, 0x30FF)]
+
+SMALL = {"a", "an", "the", "in", "of", "to", "and", "at", "on", "for",
+         "with", "my", "your", "is", "are", "be", "by"}
+
+VIBE_STYLE = {
+    "romantic": "warm golden-hour light, soft bokeh, dreamy haze, tender mood",
+    "sensual": "low warm lamp light, deep shadows, close intimate atmosphere, silk tones",
+    "dark_obsession": "cold moonlight, deep crimson highlights, gothic heavy mood",
+    "melancholic": "desaturated blue-grey, rain streaks, fog, soft lonely contrast",
+    "epic": "dramatic sky, volumetric god rays, vast scale, cinematic grandeur",
+    "party": "neon magenta and cyan, glowing lights, motion blur, high energy",
+    "chill": "cool teal dusk, still air, calm haze, relaxed mood",
+    "dreamy": "pastel mist, floating particles, soft surreal glow",
+    "nostalgic": "faded warm tones, film grain, late afternoon, memory feel",
+}
+
+VIBE_FONT = {
+    "romantic": "script", "sensual": "script", "dreamy": "script",
+    "dark_obsession": "serif", "melancholic": "serif", "nostalgic": "serif",
+    "epic": "display", "party": "display", "chill": "display",
+}
+
+VIBE_COLOR = {
+    "romantic": ((255, 236, 226), (240, 120, 140)),
+    "sensual": ((255, 226, 216), (200, 80, 92)),
+    "dark_obsession": ((245, 240, 235), (198, 45, 45)),
+    "melancholic": ((232, 238, 246), (118, 150, 182)),
+    "epic": ((250, 245, 230), (200, 150, 60)),
+    "party": ((255, 255, 255), (255, 48, 150)),
+    "chill": ((236, 246, 251), (88, 170, 200)),
+    "dreamy": ((246, 236, 255), (170, 130, 220)),
+    "nostalgic": ((245, 236, 221), (180, 140, 100)),
+}
 
 _MODELS = []
 
@@ -100,6 +130,26 @@ def norm(s):
     return re.sub(r"[\W_]+", "", s.lower())
 
 
+def clean_name(s):
+    words = re.sub(r"[\W_]+", " ", s).strip().split()
+    out = []
+    for i, w in enumerate(words):
+        w = w.lower()
+        out.append(w if (i > 0 and w in SMALL) else w.capitalize())
+    t = " ".join(out)
+    return (t[0].upper() + t[1:]) if t else t
+
+
+def thumb_words(song, n=3):
+    parts = re.findall(r"[^\W\d_]+", song)
+    keep = [p for p in parts if p.lower() not in SMALL] or parts
+    return " ".join(keep[:n])
+
+
+def has_deva(s):
+    return any(0x0900 <= ord(c) <= 0x097F for c in s)
+
+
 def find_lyrics(stem):
     d = Path("lyrics")
     if not d.exists():
@@ -128,20 +178,19 @@ def resolve(f, lyr):
     name = f.stem
     if "__" in name:
         lang, theme = name.split("__", 1)
-        lang = lang.strip().replace("_", "+")
-        theme = theme.strip().replace("_", " ")
-        return lang, theme, theme.title()
+        return lang.strip().replace("_", "+"), clean_name(theme), clean_name(theme)
     if lyr:
-        return detect_lang(lyr), "", name.strip()
-    return "english", "", name.strip()
+        return detect_lang(lyr), "", clean_name(name)
+    return "english", "", clean_name(name)
 
 
 def build_title(song, tagline):
     brand = CFG["channel"]
-    full = f"{song} | {tagline} | {brand}" if tagline else f"{song} | {brand}"
-    if len(full) > 100:
-        full = f"{song} | {brand}"
-    return full[:100]
+    t = " ".join(str(tagline).split()[:6]).strip(" |,-")
+    base = f"{song} | {t}" if t else song
+    if len(base) + len(brand) + 3 <= 72:
+        base = f"{base} | {brand}"
+    return base[:100]
 
 
 def prepare_audio(src):
@@ -162,47 +211,53 @@ def prepare_audio(src):
                     str(WORK / "song.mp3")], check=True)
 
 
-def cover(stem, image_prompt):
+def cover(stem, scene, vibe):
     from PIL import Image, ImageOps
 
-    # 1) tumhari apni image: assets/<gaane ka naam>.jpg / .png / .webp
     key = norm(stem)
     assets = Path("assets")
     if assets.exists():
         for p in sorted(assets.glob("*")):
             if p.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp") and norm(p.stem) == key:
-                im = Image.open(p).convert("RGB")
-                ImageOps.fit(im, (1920, 1080), centering=(0.5, 0.5)).save(
+                ImageOps.fit(Image.open(p).convert("RGB"), (1920, 1080)).save(
                     WORK / "cover.jpg", quality=95)
-                print("COVER: manual image", p.name)
+                print("COVER: manual", p.name)
                 return
 
-    # 2) auto image (neeche ka 120px kat jata hai taaki watermark hat jaye)
-    q = urllib.parse.quote(f"{image_prompt}, {STYLE}")
+    style = VIBE_STYLE.get(vibe, VIBE_STYLE["dark_obsession"])
+    q = urllib.parse.quote(f"{scene}, {style}")
     last = None
     for _ in range(3):
         try:
             r = requests.get(
                 f"https://image.pollinations.ai/prompt/{q}"
-                f"?width=1920&height=1200&model=flux&nologo=true&seed={random.randint(1, 999999)}",
-                timeout=180)
+                f"?width=1920&height=1080&model=flux&nologo=true"
+                f"&enhance=true&seed={random.randint(1, 999999)}",
+                timeout=200)
             r.raise_for_status()
             im = Image.open(io.BytesIO(r.content)).convert("RGB")
-            break
+            ImageOps.fit(im, (1920, 1080)).save(WORK / "cover.jpg", quality=95)
+            print("COVER: auto", vibe)
+            return
         except Exception as e:
             last = e
             print("COVER RETRY:", e)
             time.sleep(10)
-    else:
-        raise RuntimeError(f"cover generate nahi hua: {last}")
-
-    ImageOps.fit(im, (1920, 1080), centering=(0.5, 0.0)).save(WORK / "cover.jpg", quality=95)
-    print("COVER: auto image")
+    raise RuntimeError(f"cover fail: {last}")
 
 
-def load_font(size):
+def load_font(size, kind="display"):
     from PIL import ImageFont
-    for path in (FONT, "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"):
+    table = {
+        "display": ["assets/BebasNeue-Regular.ttf", FONT,
+                    "/usr/share/fonts/truetype/dejavu/DejaVuSansCondensed-Bold.ttf"],
+        "script": ["assets/GreatVibes-Regular.ttf", FONT,
+                   "/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf"],
+        "serif": ["/usr/share/fonts/truetype/dejavu/DejaVuSerif-Bold.ttf", FONT],
+        "deva": ["assets/NotoSansDevanagari.ttf",
+                 "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", FONT],
+    }
+    for path in table.get(kind, table["display"]):
         try:
             return ImageFont.truetype(path, size)
         except Exception:
@@ -225,37 +280,51 @@ def wrap(text, font, maxw, d):
     return lines
 
 
-def thumbnail(song):
+def thumbnail(song, kicker, vibe):
     from PIL import Image, ImageDraw
     im = Image.open(WORK / "cover.jpg").convert("RGB").resize((1280, 720))
 
     ov = Image.new("RGBA", im.size, (0, 0, 0, 0))
     od = ImageDraw.Draw(ov)
-    for y in range(330, 720):
-        od.line([(0, y), (1280, y)], fill=(0, 0, 0, int(215 * (y - 330) / 390)))
+    for y in range(720):
+        a = 40 + int(200 * max(0, y - 250) / 470)
+        od.line([(0, y), (1280, y)], fill=(0, 0, 0, min(a, 235)))
     im = Image.alpha_composite(im.convert("RGBA"), ov).convert("RGB")
-
     d = ImageDraw.Draw(im)
-    text = song.upper()
-    maxw = 1160
-    size = 120
-    while True:
-        font = load_font(size)
-        lines = wrap(text, font, maxw, d)
-        fits = all(d.textlength(l, font=font) <= maxw for l in lines)
-        if (len(lines) <= 2 and fits) or size <= 48:
-            break
-        size -= 6
 
-    lh = int(size * 1.12)
-    y = 720 - 50 - lh * len(lines)
+    text = thumb_words(song)
+    kind = "deva" if has_deva(text) else VIBE_FONT.get(vibe, "display")
+    ink, accent = VIBE_COLOR.get(vibe, ((255, 250, 242), (200, 60, 60)))
+
+    bf = load_font(24, "display")
+    bw = d.textlength(CFG["channel"], font=bf)
+    d.rounded_rectangle([46, 40, 46 + bw + 40, 82], radius=21, fill=(0, 0, 0, 160))
+    d.text((66, 48), CFG["channel"], font=bf, fill=(240, 233, 222))
+
+    kf = load_font(30, "display")
+    kick = kicker.upper()[:26]
+    kw = d.textlength(kick, font=kf)
+    d.rectangle([48, 96, 48 + kw + 26, 138], fill=accent)
+    d.text((61, 103), kick, font=kf, fill=(20, 14, 14))
+
+    maxw = 1080
+    size = 140 if kind != "script" else 168
+    while True:
+        font = load_font(size, kind)
+        lines = wrap(text, font, maxw, d)
+        if len(lines) <= 2 or size <= 58:
+            break
+        size -= 8
+
+    lh = int(size * (0.95 if kind == "script" else 1.06))
+    y = 650 - lh * len(lines)
+    d.rectangle([56, y - 26, 150, y - 18], fill=accent)
     for line in lines:
-        d.text((63, y + 3), line, font=font, fill=(0, 0, 0))
-        d.text((60, y), line, font=font, fill=(255, 245, 230))
+        d.text((60, y + 4), line, font=font, fill=(0, 0, 0))
+        d.text((56, y), line, font=font, fill=ink)
         y += lh
 
-    d.text((60, 40), CFG["channel"], font=load_font(40), fill=(255, 245, 230))
-    im.save(WORK / "thumb.jpg", quality=92)
+    im.save(WORK / "thumb.jpg", quality=93)
 
 
 def video():
@@ -278,44 +347,48 @@ def video():
 def main():
     files = queue_files()
     if not files:
-        print("QUEUE EMPTY — kuch upload karne ko nahi hai")
+        print("QUEUE EMPTY")
         return
 
     f = files[0]
-    print("QUEUE:", len(files), "file(s) | picking:", f.name)
+    print("QUEUE:", len(files), "| picking:", f.name)
 
     prepare_audio(f)
-
     lyr, lyr_file = find_lyrics(f.stem)
-    print("LYRICS:", lyr_file.name if lyr_file else "NOT FOUND (naam match nahi hua, sirf gaane ke naam se kaam chalega)")
+    print("LYRICS:", lyr_file.name if lyr_file else "NOT FOUND")
 
     lang, theme, song = resolve(f, lyr)
-    print("SONG:", song)
-    print("LANGUAGE:", lang)
+    print("SONG:", song, "| LANG:", lang)
 
     seo = gemini(CFG["seo_prompt"].format(
         channel=CFG["channel"], artist=CFG["artist"], lang=lang, song=song,
-        theme=theme or "not given - work it out from the song name and lyrics")
+        theme=theme or "work it out from the name and lyrics")
         + f"\n\nLyrics:\n{lyr[:2500]}")
-    for k in ("description", "tags"):
+
+    for k in ("description", "tags", "scene_prompt"):
         if not seo.get(k):
             raise RuntimeError(f"seo missing {k}")
 
-    title = build_title(song, str(seo.get("tagline", "")).strip())
-    theme = str(seo.get("theme") or theme or song)
-    image_prompt = str(seo.get("image_prompt") or theme)
-    print("THEME:", theme)
-    print("TITLE:", title)
-    print("IMAGE PROMPT:", image_prompt)
+    vibe = str(seo.get("vibe", "")).strip().lower().replace(" ", "_")
+    if vibe not in VIBE_STYLE:
+        vibe = "dark_obsession"
 
-    cover(f.stem, image_prompt)
-    thumbnail(song)
+    title = build_title(song, str(seo.get("tagline", "")).strip())
+    kicker = str(seo.get("kicker") or vibe.replace("_", " ")).strip()
+    scene = str(seo["scene_prompt"]).strip()
+
+    print("VIBE:", vibe, "| KICKER:", kicker)
+    print("TITLE:", title)
+    print("SCENE:", scene[:160])
+
+    cover(f.stem, scene, vibe)
+    thumbnail(song, kicker, vibe)
     print("ART OK")
 
     video()
     print("VIDEO OK")
 
-    json.dump({"lang": lang, "theme": theme, "title": title,
+    json.dump({"lang": lang, "theme": theme, "vibe": vibe, "title": title,
                "description": seo["description"], "tags": seo["tags"]},
               open(WORK / "meta.json", "w", encoding="utf-8"),
               ensure_ascii=False, indent=2)
