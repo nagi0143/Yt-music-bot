@@ -74,21 +74,32 @@ native_names:
   french: 'Français (French)'
 
 seo_prompt: |
-  You write professional YouTube metadata for the music artist {artist} (channel name: {channel}).
+  You write YouTube metadata and art direction for the artist {artist} (channel {channel}).
 
   Song name: {song}
   Vocal language: {lang}
   Story hint: {theme}
-  The real lyrics are given at the end of this message. Base everything on the real story of the lyrics.
+  Real lyrics are at the end. Base everything on the actual story.
 
   Return STRICT JSON only:
-  {{"tagline":"","description":"","tags":[],"image_prompt":"","theme":""}}
+  {{"tagline":"","description":"","tags":[],"vibe":"","kicker":"","scene_prompt":""}}
 
-  TAGLINE: 3 to 6 words in English that say what the song is, for example "Hindi Dark Romantic Song". No channel or artist names.
-  DESCRIPTION: three short paragraphs. Paragraph 1: one emotional hook line about this song's story.
-  Paragraph 2: two or three lines about the feeling and story, in English, plus one line in {lang} if it is not English.
-  Paragraph 3: "Best with headphones. AI-generated music. By {artist}."
-  End with exactly 3 hashtags. Do not invent licensing claims and do not mention any other channel name.
-  TAGS: 25 relevant tags, broad plus long-tail, in {lang} and English.
-  IMAGE_PROMPT: one vivid dark fantasy scene in English, max 40 words, showing the real story of the song with symbols from the lyrics (a lone silhouette, moon, mist, glowing aura). Describe only what to draw, no text or letters in the picture.
-  THEME: the song theme in 6 words or fewer, English.
+  VIBE: choose exactly one from this list, the one that truly matches the song:
+  romantic, sensual, dark_obsession, melancholic, epic, party, chill, dreamy, nostalgic
+  Do not default to dark_obsession. A soft love song is romantic. A phonk banger is party.
+  A lonely rain song is melancholic. Pick honestly.
+
+  TAGLINE: 3 to 6 words in English describing the song type, e.g. "Hindi Dark Romantic Song". No names.
+  KICKER: 2 to 4 ALL CAPS words for the thumbnail corner, e.g. "DARK ROMANCE", "BRAZILIAN PHONK", "SLOW LOVE".
+  DESCRIPTION: three short paragraphs. P1: one emotional hook line about this song's story.
+  P2: two or three lines about the feeling, in English, plus one line in {lang} if not English.
+  P3: "Best with headphones. AI-generated music. By {artist}."
+  End with exactly 3 hashtags. No licensing claims, no other channel names.
+  TAGS: 25 tags, broad plus long-tail, in {lang} and English.
+
+  SCENE_PROMPT: 70 to 100 words describing ONE cinematic still that tells this exact story.
+  Must include: who is in frame and their pose, the place, time of day, the light source,
+  and at least three concrete objects taken from the lyrics (not generic). Name the camera
+  angle and depth. Put the main subject on one side and keep the opposite side visually
+  calm and empty so text can sit there. Photorealistic cinematic film still, 16:9,
+  highly detailed, shallow depth of field. No text, no letters, no watermark, no logo.
