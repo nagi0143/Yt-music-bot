@@ -10,6 +10,9 @@ WORK = Path("work"); WORK.mkdir(exist_ok=True)
 SONGS = Path("songs")
 FONT = "assets/Anton-Regular.ttf"
 
+W, H = 3840, 2160
+GEN_W, GEN_H = 2048, 1152
+
 SCRIPTS = [("hindi", 0x0900, 0x097F), ("punjabi", 0x0A00, 0x0A7F),
            ("russian", 0x0400, 0x04FF), ("korean", 0xAC00, 0xD7AF),
            ("japanese", 0x3040, 0x30FF)]
@@ -207,20 +210,59 @@ def prepare_audio(src):
         raise RuntimeError(f"song bahut chhoti hai: {seconds}s")
 
     subprocess.run(["ffmpeg", "-y", "-i", str(src),
-                    "-c:a", "libmp3lame", "-b:a", "192k",
+                    "-c:a", "libmp3lame", "-b:a", "320k",
                     str(WORK / "song.mp3")], check=True)
 
 
+def trim_bars(im, tol=20):
+    g = im.convert("L")
+    w, h = g.size
+    px = g.load()
+    sx, sy = max(1, w // 80), max(1, h // 80)
+
+    def row_dark(y):
+        return all(px[x, y] < tol for x in range(0, w, sx))
+
+    top = 0
+    while top < h - 20 and row_dark(top):
+        top += 1
+    bot = h - 1
+    while bot > top + 20 and row_dark(bot):
+        bot -= 1
+
+    def col_dark(x):
+        return all(px[x, y] < tol for y in range(top, bot, sy))
+
+    left = 0
+    while left < w - 20 and col_dark(left):
+        left += 1
+    right = w - 1
+    while right > left + 20 and col_dark(right):
+        right -= 1
+
+    if right - left < w * 0.55 or bot - top < h * 0.55:
+        return im
+    print("BAR TRIM:", (left, top, right, bot), "from", (w, h))
+    return im.crop((left, top, right + 1, bot + 1))
+
+
+def finish(im):
+    from PIL import Image, ImageOps, ImageFilter
+    im = trim_bars(im)
+    im = ImageOps.fit(im, (W, H), method=Image.LANCZOS, centering=(0.5, 0.42))
+    im = im.filter(ImageFilter.UnsharpMask(radius=1.8, percent=155, threshold=2))
+    im.save(WORK / "cover.jpg", quality=96, subsampling=0)
+
+
 def cover(stem, scene, vibe):
-    from PIL import Image, ImageOps
+    from PIL import Image
 
     key = norm(stem)
     assets = Path("assets")
     if assets.exists():
         for p in sorted(assets.glob("*")):
             if p.suffix.lower() in (".jpg", ".jpeg", ".png", ".webp") and norm(p.stem) == key:
-                ImageOps.fit(Image.open(p).convert("RGB"), (1920, 1080)).save(
-                    WORK / "cover.jpg", quality=95)
+                finish(Image.open(p).convert("RGB"))
                 print("COVER: manual", p.name)
                 return
 
@@ -231,13 +273,12 @@ def cover(stem, scene, vibe):
         try:
             r = requests.get(
                 f"https://image.pollinations.ai/prompt/{q}"
-                f"?width=1920&height=1080&model=flux&nologo=true"
+                f"?width={GEN_W}&height={GEN_H}&model=flux&nologo=true"
                 f"&enhance=true&seed={random.randint(1, 999999)}",
-                timeout=200)
+                timeout=240)
             r.raise_for_status()
-            im = Image.open(io.BytesIO(r.content)).convert("RGB")
-            ImageOps.fit(im, (1920, 1080)).save(WORK / "cover.jpg", quality=95)
-            print("COVER: auto", vibe)
+            finish(Image.open(io.BytesIO(r.content)).convert("RGB"))
+            print("COVER: auto", vibe, "->", W, "x", H)
             return
         except Exception as e:
             last = e
@@ -281,8 +322,9 @@ def wrap(text, font, maxw, d):
 
 
 def thumbnail(song, kicker, vibe):
-    from PIL import Image, ImageDraw
-    im = Image.open(WORK / "cover.jpg").convert("RGB").resize((1280, 720))
+    from PIL import Image, ImageDraw, ImageFilter
+    im = Image.open(WORK / "cover.jpg").convert("RGB").resize(
+        (1280, 720), Image.LANCZOS)
 
     ov = Image.new("RGBA", im.size, (0, 0, 0, 0))
     od = ImageDraw.Draw(ov)
@@ -324,7 +366,8 @@ def thumbnail(song, kicker, vibe):
         d.text((56, y), line, font=font, fill=ink)
         y += lh
 
-    im.save(WORK / "thumb.jpg", quality=93)
+    im.filter(ImageFilter.UnsharpMask(radius=1.2, percent=90, threshold=2)).save(
+        WORK / "thumb.jpg", quality=95, subsampling=0)
 
 
 def video():
@@ -332,16 +375,21 @@ def video():
         "ffmpeg", "-y", "-loop", "1", "-i", str(WORK / "cover.jpg"),
         "-i", str(WORK / "song.mp3"),
         "-filter_complex",
-        "[0:v]scale=2400:2400,zoompan=z='min(zoom+0.00035,1.18)'"
-        ":d=9999:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s=1920x1080:fps=25,"
-        "eq=saturation=1.08:contrast=1.05[v]",
-        "-map", "[v]", "-map", "1:a", "-c:v", "libx264", "-preset", "medium",
-        "-crf", "20", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "256k",
+        f"[0:v]scale={W}:{H}:flags=lanczos,"
+        "zoompan=z='min(zoom+0.00028,1.14)'"
+        f":d=9999:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':s={W}x{H}:fps=24,"
+        "unsharp=5:5:0.55:5:5:0.0,eq=saturation=1.06:contrast=1.04[v]",
+        "-map", "[v]", "-map", "1:a",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "18",
+        "-profile:v", "high", "-level", "5.1", "-pix_fmt", "yuv420p",
+        "-tune", "stillimage", "-threads", "0",
+        "-c:a", "aac", "-b:a", "320k",
         "-shortest", "-movflags", "+faststart", str(WORK / "video.mp4")
     ], check=True)
     subprocess.run(["ffmpeg", "-y", "-i", str(WORK / "video.mp4"), "-af",
                     f"loudnorm=I={CFG['loudness_lufs']}:TP=-1.5:LRA=11",
-                    "-c:v", "copy", str(WORK / "final.mp4")], check=True)
+                    "-c:v", "copy", "-c:a", "aac", "-b:a", "320k",
+                    str(WORK / "final.mp4")], check=True)
 
 
 def main():
@@ -379,7 +427,6 @@ def main():
 
     print("VIBE:", vibe, "| KICKER:", kicker)
     print("TITLE:", title)
-    print("SCENE:", scene[:160])
 
     cover(f.stem, scene, vibe)
     thumbnail(song, kicker, vibe)
